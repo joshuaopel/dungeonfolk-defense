@@ -31,9 +31,9 @@ const CONFIG = {
 
     // Game rules
     DUNGEON_HEART_MAX_HP: 100,
-    STARTING_GOLD: 150,
-    PASSIVE_GOLD_PER_SECOND: 2,
-    PREP_TIME: 30,
+    STARTING_GOLD: 200,
+    PASSIVE_GOLD_PER_SECOND: 3,
+    PREP_TIME: 35,
     HEART_DAMAGE_PER_HERO: 10,
 
     MONSTERS: {
@@ -115,7 +115,7 @@ const CONFIG = {
         archer: {
             id: 'archer', name: 'Archer', emoji: '🏹',
             color: '#81C784', hp: 60, attack: 12, attackSpeed: 1.6,
-            speed: 55, rangePixels: 160, reward: 15, type: 'ranged',
+            speed: 55, rangePixels: 130, reward: 15, type: 'ranged',
         },
         cleric: {
             id: 'cleric', name: 'Cleric', emoji: '✨',
@@ -166,14 +166,14 @@ const CONFIG = {
 
     // Wave scaling
     WAVE: {
-        BASE_HERO_COUNT: 3,
-        HEROES_PER_WAVE: 1.8,
-        HP_SCALE_PER_WAVE: 0.12,
-        ATTACK_SCALE_PER_WAVE: 0.08,
-        SPAWN_INTERVAL_BASE: 3.5,
-        SPAWN_INTERVAL_MIN: 1.2,
-        WAVE_REWARD_BASE: 60,
-        WAVE_REWARD_PER_WAVE: 25,
+        BASE_HERO_COUNT: 2,
+        HEROES_PER_WAVE: 1.0,
+        HP_SCALE_PER_WAVE: 0.08,
+        ATTACK_SCALE_PER_WAVE: 0.05,
+        SPAWN_INTERVAL_BASE: 4.5,
+        SPAWN_INTERVAL_MIN: 1.5,
+        WAVE_REWARD_BASE: 80,
+        WAVE_REWARD_PER_WAVE: 30,
     },
 
     // Mini slime stats (slime split offspring)
