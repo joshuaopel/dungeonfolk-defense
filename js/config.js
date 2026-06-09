@@ -1,22 +1,33 @@
 // All game constants and balancing values — change here to tune the game
 
+const DUNGEON_PATH = [
+    [0,3],[1,3],[2,3],
+    [2,2],[2,1],[2,0],
+    [3,0],[4,0],[5,0],[6,0],[7,0],[8,0],[9,0],[10,0],
+    [10,1],[10,2],[10,3],[10,4],
+    [9,4],[8,4],[7,4],[6,4],[5,4],[4,4],[3,4],
+    [3,5],[3,6],
+    [4,6],[5,6],[6,6],[7,6],[8,6],[9,6],[10,6],[11,6],[12,6],
+];
+
+const PATH_SET = new Set(DUNGEON_PATH.map(([c, r]) => `${c},${r}`));
+
 const CONFIG = {
     // Canvas
     CANVAS_WIDTH: 1200,
     CANVAS_HEIGHT: 680,
 
     // Grid layout
-    CELL_SIZE: 90,
-    GRID_COLS: 12,
-    GRID_ROWS: 5,
-    GRID_X: 60,
-    GRID_Y: 15,
+    CELL_SIZE: 78,
+    GRID_COLS: 13,
+    GRID_ROWS: 7,
+    GRID_X: 93,
+    GRID_Y: 12,
 
-    // Special columns
-    ENTRANCE_COL: 0,
-    HEART_COL: 11,
-    MIN_PLACE_COL: 1,
-    MAX_PLACE_COL: 10,
+    // Path
+    DUNGEON_PATH,
+    PATH_SET,
+    HEART_POS: [12, 6],
 
     // Game rules
     DUNGEON_HEART_MAX_HP: 100,
@@ -43,7 +54,7 @@ const CONFIG = {
             id: 'skeletonArcher', name: 'Skel. Archer', emoji: '💀',
             cost: 100, maxHp: 65, attack: 14, attackSpeed: 0.9,
             rangePixels: 360, color: '#9E9E9E', cellTint: 'rgba(158,158,158,0.2)',
-            description: 'Shoots arrows down the lane.',
+            description: 'Shoots arrows at passing heroes.',
             ranged: true,
         },
         batSwarm: {
@@ -63,7 +74,7 @@ const CONFIG = {
             id: 'animatedArmor', name: 'Armor', emoji: '🛡️',
             cost: 200, maxHp: 320, attack: 12, attackSpeed: 0.7,
             rangePixels: 100, color: '#B0BEC5', cellTint: 'rgba(176,190,197,0.2)',
-            description: 'Massive HP, blocks the entire lane.',
+            description: 'Massive HP, blocks the corridor.',
             armor: 5,
         },
     },
@@ -183,7 +194,7 @@ const CONFIG = {
     ],
 
     // UI
-    BOTTOM_PANEL_Y: 490,
+    BOTTOM_PANEL_Y: 568,
     UNIT_CARD_W: 76,
     UNIT_CARD_H: 90,
     UNIT_CARD_MARGIN: 5,
@@ -195,6 +206,8 @@ const CONFIG = {
         cellDark: '#2a2540',
         cellLight: '#332e50',
         cellBorder: '#1a1530',
+        pathTile: '#1a1430',
+        pathBorder: '#0d0d20',
         entrance: '#1a2a1a',
         entranceBorder: '#2a4a2a',
         heart: '#3a1a2a',
