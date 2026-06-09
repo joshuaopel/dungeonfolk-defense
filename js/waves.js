@@ -1,18 +1,27 @@
 // Wave generation and hero name pools for the memory system
 
 const HERO_NAMES = {
+    // Cannon fodder
+    ruffian: ['Grim', 'Lunk', 'Snark', 'Burp', 'Clod', 'Knob', 'Duff'],
+    zealot: ['The Devout', 'True Believer', 'Brother Smash', 'Sister Chaos', 'Fanatic'],
+    brute: ['Ox', 'Crusher', 'Big Lenny', 'Slab', 'Thud', 'Boulder'],
+    // Named heroes (wave champions)
     knight: ['Sir Reginald', 'Sir Gareth', 'Dame Heloise', 'Sir Aldric', 'Sir Barnaby'],
     archer: ['Robin the Keen', 'Arrow-Eye Mira', 'Quill', 'Finn Broadbow', 'Whisper'],
     cleric: ['Brother Aldous', 'Sister Wren', 'Friar Bum', 'Deacon Edith', 'Padre Gus'],
     rogue: ['Sticky Fingers', 'Shadow-Toes', 'The Lurker', 'Nimble Ned', 'Slip'],
     wizard: ['Magister Boom', 'Arcana Jones', 'Zyx the Volatile', 'Professor Fizzle', 'Wanda'],
     paladin: ['Brightshield', 'Holy Tamara', 'Sir Lux', 'Golden Gwen', 'Paladin Paul'],
+    // Legendary bosses
     dragonSlayer: ['THE Dragon Slayer'],
     legendaryAdventurer: ['Legendary Dave'],
     heroicPartyLeader: ['Commander Crunch'],
 };
 
 const HERO_QUIRKS = {
+    ruffian: ['mutters threats', 'flexes constantly', 'trips on own feet', 'borrowed this sword'],
+    zealot: ['chants aggressively', 'sets things on fire', 'believes in prophecy', 'follows a weird god'],
+    brute: ['breathes loudly', 'confused by doors', 'is actually kind', 'loves their mom'],
     knight: ['charges headfirst', 'polishes armor constantly', 'yells battle cries', 'drinks from every fountain'],
     archer: ['hums while aiming', 'counts arrows obsessively', 'avoids dungeons on Tuesdays', 'snacks between fights'],
     cleric: ['mutters prayers', 'heals strangers unnecessarily', 'is overly cheerful', 'blesses everything twice'],
@@ -34,29 +43,26 @@ class WaveManager {
         const w = CONFIG.WAVE;
         const isBossWave = waveNum % 5 === 0;
 
-        // Build hero pool based on wave progression
-        const pool = [];
-        pool.push('knight', 'knight');
-        if (waveNum >= 2) pool.push('archer', 'archer');
-        if (waveNum >= 3) pool.push('cleric');
-        if (waveNum >= 4) pool.push('rogue');
-        if (waveNum >= 5) pool.push('cleric', 'rogue');
-        if (waveNum >= 6) pool.push('wizard');
-        if (waveNum >= 7) pool.push('paladin');
-        if (waveNum >= 8) pool.push('wizard', 'paladin');
-
+        // Regular spawns: cannon fodder only
+        const fodderTypes = Object.keys(CONFIG.FODDER);
         const count = Math.floor(w.BASE_HERO_COUNT + waveNum * w.HEROES_PER_WAVE);
-        const interval = Math.max(w.SPAWN_INTERVAL_MIN, w.SPAWN_INTERVAL_BASE - waveNum * 0.22);
+        const interval = Math.max(w.SPAWN_INTERVAL_MIN, w.SPAWN_INTERVAL_BASE - waveNum * 0.18);
 
         const entries = [];
         let t = 0;
         for (let i = 0; i < count; i++) {
-            const type = pool[Math.floor(Math.random() * pool.length)];
-            entries.push({ type, delay: t });
+            const type = fodderTypes[Math.floor(Math.random() * fodderTypes.length)];
+            entries.push({ type, delay: t, isFodder: true });
             t += interval * (0.7 + Math.random() * 0.6);
         }
 
-        // Boss wave: add boss at the end
+        // Wave champion: a named hero at the end of every wave
+        const heroTypes = Object.keys(CONFIG.HEROES);
+        const heroType = heroTypes[(waveNum - 1) % heroTypes.length];
+        entries.push({ type: heroType, delay: t + 2.5, isChampion: true });
+        t += 5;
+
+        // Legendary boss on every 5th wave (after the champion)
         if (isBossWave) {
             const bossTypes = Object.keys(CONFIG.BOSSES);
             const bossType = bossTypes[(Math.floor(waveNum / 5) - 1) % bossTypes.length];
@@ -99,15 +105,25 @@ class WaveManager {
 
     _spawnHero(entry, game) {
         const isBoss = entry.isBoss || false;
+        const isFodder = entry.isFodder || false;
+        const isChampion = entry.isChampion || false;
+
         let cfgBase;
         if (isBoss) {
             cfgBase = CONFIG.BOSSES[entry.type];
+        } else if (isFodder) {
+            cfgBase = CONFIG.FODDER[entry.type];
         } else {
             cfgBase = CONFIG.HEROES[entry.type];
         }
         if (!cfgBase) return;
 
-        const hero = new Hero(cfgBase, this.currentWave);
+        // Champions are 1.8× tougher than the base hero stats
+        const scaleMult = isChampion ? 1.8 : 1;
+        const hero = new Hero(cfgBase, this.currentWave, scaleMult);
+
+        // Champions render as boss (glow + name tag always visible)
+        if (isChampion) hero.isBoss = true;
 
         // Assign name from memory or fresh name
         const memory = game.memory.getOrCreate(cfgBase.id);
@@ -119,7 +135,7 @@ class WaveManager {
         hero.displayName = memory.names[nameIndex];
         hero.quirk = this._getQuirk(cfgBase.id, memory);
 
-        // Trait from memory: mimic resistance if survived many times
+        // Memory traits: mimic resistance and extra HP for veteran heroes/champions
         if (memory.timesDefeated >= 3 && cfgBase.id !== 'knight') {
             hero.mimicResistant = true;
         }
@@ -131,7 +147,7 @@ class WaveManager {
         hero.deathCount = memory.timesDefeated;
 
         game.heroes.push(hero);
-        game.spawnParticle(hero.x + 40, hero.y - 30, cfgBase.color, '!');
+        game.spawnParticle(hero.x + 40, hero.y - 30, cfgBase.color, isChampion ? '⚠' : '!');
     }
 
     _getQuirk(type, memory) {

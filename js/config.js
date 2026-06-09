@@ -106,6 +106,25 @@ const CONFIG = {
         },
     },
 
+    // Weak cannon-fodder enemies that make up the body of each wave
+    FODDER: {
+        ruffian: {
+            id: 'ruffian', name: 'Ruffian', emoji: '😤',
+            color: '#A5D6A7', hp: 40, attack: 9, attackSpeed: 1.0,
+            speed: 50, rangePixels: 78, reward: 8,
+        },
+        zealot: {
+            id: 'zealot', name: 'Zealot', emoji: '🔥',
+            color: '#FFCC80', hp: 28, attack: 7, attackSpeed: 1.3,
+            speed: 68, rangePixels: 75, reward: 6,
+        },
+        brute: {
+            id: 'brute', name: 'Brute', emoji: '🪓',
+            color: '#EF9A9A', hp: 65, attack: 13, attackSpeed: 0.75,
+            speed: 34, rangePixels: 82, reward: 10,
+        },
+    },
+
     HEROES: {
         knight: {
             id: 'knight', name: 'Knight', emoji: '⚔️',

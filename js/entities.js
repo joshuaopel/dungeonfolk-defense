@@ -198,7 +198,7 @@ class MiniSlime extends Monster {
 // ─── Hero ─────────────────────────────────────────────────────────────────────
 
 class Hero extends Entity {
-    constructor(cfg, waveNum) {
+    constructor(cfg, waveNum, scaleMult = 1) {
         // Start just off-screen to the left of path entry point
         const startPos = CONFIG.DUNGEON_PATH[0];
         const x = CONFIG.GRID_X + startPos[0] * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE / 2 - CONFIG.CELL_SIZE;
@@ -212,9 +212,9 @@ class Hero extends Entity {
         const hpScale = 1 + (waveNum - 1) * CONFIG.WAVE.HP_SCALE_PER_WAVE;
         const atkScale = 1 + (waveNum - 1) * CONFIG.WAVE.ATTACK_SCALE_PER_WAVE;
 
-        this.maxHp = Math.floor(cfg.hp * hpScale);
+        this.maxHp = Math.floor(cfg.hp * hpScale * scaleMult);
         this.hp = this.maxHp;
-        this.attack = cfg.attack * atkScale;
+        this.attack = cfg.attack * atkScale * scaleMult;
         this.baseSpeed = cfg.speed;
         this.speed = cfg.speed;
         this.rangePixels = cfg.rangePixels;
