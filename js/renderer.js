@@ -60,27 +60,52 @@ class Renderer {
         const ctx = this.ctx;
         const C = CONFIG.COLORS;
         const S = CONFIG.CELL_SIZE;
+        const PATH = CONFIG.DUNGEON_PATH;
+        const PATH_SET = CONFIG.PATH_SET;
+        const [heartCol, heartRow] = CONFIG.HEART_POS;
+
+        // Precompute path direction arrows: for each path index, derive the direction
+        // from previous node to current node
+        const pathDirs = PATH.map((node, i) => {
+            if (i === 0) return [1, 0]; // first tile: entering from left
+            const [pc, pr] = PATH[i - 1];
+            const [cc, cr] = node;
+            return [cc - pc, cr - pr];
+        });
+        const dirArrow = ([dc, dr]) => {
+            if (dc === 1) return '→';
+            if (dc === -1) return '←';
+            if (dr === 1) return '↓';
+            if (dr === -1) return '↑';
+            return '·';
+        };
+
+        // Build a map from "col,row" -> path index for arrow lookup
+        const pathIndexMap = new Map();
+        PATH.forEach(([c, r], i) => pathIndexMap.set(`${c},${r}`, i));
 
         for (let row = 0; row < CONFIG.GRID_ROWS; row++) {
             for (let col = 0; col < CONFIG.GRID_COLS; col++) {
                 const cx = CONFIG.GRID_X + col * S;
                 const cy = CONFIG.GRID_Y + row * S;
+                const key = `${col},${row}`;
+                const isPath = PATH_SET.has(key);
+                const isHeart = (col === heartCol && row === heartRow);
 
-                // Cell base color — checkerboard subtle variation
-                if (col === CONFIG.ENTRANCE_COL) {
-                    ctx.fillStyle = C.entrance;
-                } else if (col === CONFIG.HEART_COL) {
-                    // Heart pulsing tint
-                    const pulse = (Math.sin(this.time * 2.5) * 0.5 + 0.5) * 0.15;
-                    ctx.fillStyle = `rgba(180, 30, 80, ${0.3 + pulse})`;
+                if (isHeart) {
+                    // Heart tile — drawn separately below
+                    ctx.fillStyle = C.heart;
+                } else if (isPath) {
+                    ctx.fillStyle = C.pathTile;
                 } else {
+                    // Tower spot — subtle checkerboard
                     ctx.fillStyle = (col + row) % 2 === 0 ? C.cellDark : C.cellLight;
                 }
                 ctx.fillRect(cx, cy, S, S);
 
-                // Cell tint for placed entity
+                // Entity tint for placed unit
                 const cell = game.grid[row][col];
-                if (cell) {
+                if (cell && !isPath) {
                     const tint = cell.cfg?.cellTint;
                     if (tint) {
                         ctx.fillStyle = tint;
@@ -88,14 +113,14 @@ class Renderer {
                     }
                 }
 
-                // Hover highlight
+                // Hover highlight for tower spots
                 if (game.hoveredCell && game.hoveredCell.col === col && game.hoveredCell.row === row) {
-                    if (!cell && col >= CONFIG.MIN_PLACE_COL && col <= CONFIG.MAX_PLACE_COL) {
+                    if (!isPath && !isHeart && !cell) {
                         if (game.selectedUnit) {
                             const cfgMap = game.selectedUnit.isMonster ? CONFIG.MONSTERS : CONFIG.TRAPS;
                             const cfg = cfgMap[game.selectedUnit.id];
                             const canAfford = game.gold >= cfg.cost;
-                            ctx.fillStyle = canAfford ? 'rgba(100,255,100,0.18)' : 'rgba(255,80,80,0.18)';
+                            ctx.fillStyle = canAfford ? 'rgba(100,255,100,0.20)' : 'rgba(255,80,80,0.20)';
                         } else {
                             ctx.fillStyle = 'rgba(255,255,255,0.08)';
                         }
@@ -103,94 +128,91 @@ class Renderer {
                     }
                 }
 
-                // Grid border
-                ctx.strokeStyle = C.cellBorder;
-                ctx.lineWidth = 1;
+                // Path direction arrow overlay
+                if (isPath && !isHeart) {
+                    const pi = pathIndexMap.get(key);
+                    const dir = pathDirs[pi];
+                    ctx.save();
+                    ctx.globalAlpha = 0.28;
+                    ctx.font = `${Math.floor(S * 0.38)}px sans-serif`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillStyle = '#a090d0';
+                    ctx.fillText(dirArrow(dir), cx + S / 2, cy + S / 2);
+                    ctx.restore();
+                }
+
+                // Cell border
+                if (isPath || isHeart) {
+                    ctx.strokeStyle = C.pathBorder;
+                    ctx.lineWidth = 1.5;
+                } else {
+                    ctx.strokeStyle = C.cellBorder;
+                    ctx.lineWidth = 1;
+                }
                 ctx.strokeRect(cx, cy, S, S);
             }
         }
 
-        // Entrance label
-        ctx.save();
-        ctx.font = 'bold 11px sans-serif';
-        ctx.fillStyle = '#4a7a4a';
-        ctx.textAlign = 'center';
-        ctx.fillText('ENTRANCE', CONFIG.GRID_X + CONFIG.CELL_SIZE / 2, CONFIG.GRID_Y - 4);
-        // Lane arrows (heroes move left to right)
-        for (let row = 0; row < CONFIG.GRID_ROWS; row++) {
-            const ay = CONFIG.GRID_Y + row * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE / 2;
-            ctx.fillStyle = 'rgba(100,180,100,0.35)';
-            ctx.font = '18px sans-serif';
-            ctx.fillText('→', CONFIG.GRID_X + CONFIG.CELL_SIZE / 2, ay + 6);
+        // Entrance indicator: small label above the first path tile
+        {
+            const [ec, er] = PATH[0];
+            const ex = CONFIG.GRID_X + ec * S + S / 2;
+            const ey = CONFIG.GRID_Y + er * S;
+            ctx.save();
+            ctx.font = 'bold 10px sans-serif';
+            ctx.fillStyle = '#4a8a4a';
+            ctx.textAlign = 'center';
+            ctx.fillText('ENTRANCE', ex, ey - 3);
+            // Arrow pointing into the grid
+            ctx.fillStyle = 'rgba(100,200,100,0.6)';
+            ctx.font = '14px sans-serif';
+            ctx.fillText('→', CONFIG.GRID_X - 16, ey + S / 2 + 5);
+            ctx.restore();
         }
-        ctx.restore();
 
-        // Dungeon Heart column
+        // Dungeon heart tile
         this._drawDungeonHeart(game);
-
-        // Entrance arch decoration
-        this._drawEntrance();
-    }
-
-    _drawEntrance() {
-        const ctx = this.ctx;
-        const ex = CONFIG.GRID_X;
-        const ey = CONFIG.GRID_Y;
-        const h = CONFIG.GRID_ROWS * CONFIG.CELL_SIZE;
-        const w = CONFIG.CELL_SIZE;
-
-        // Arch frame
-        ctx.strokeStyle = '#3a6a3a';
-        ctx.lineWidth = 3;
-        ctx.strokeRect(ex, ey, w, h);
-
-        // "Dungeon Entrance" decorative text
-        ctx.save();
-        ctx.translate(ex + w / 2, ey + h / 2);
-        ctx.rotate(-Math.PI / 2);
-        ctx.font = 'bold 12px sans-serif';
-        ctx.fillStyle = '#4a7a4a';
-        ctx.textAlign = 'center';
-        ctx.fillText('DUNGEON ENTRANCE', 0, 0);
-        ctx.restore();
     }
 
     _drawDungeonHeart(game) {
         const ctx = this.ctx;
         const S = CONFIG.CELL_SIZE;
-        const heartX = CONFIG.GRID_X + CONFIG.HEART_COL * S;
-        const heartY = CONFIG.GRID_Y;
-        const heartH = CONFIG.GRID_ROWS * S;
+        const [hc, hr] = CONFIG.HEART_POS;
+        const heartX = CONFIG.GRID_X + hc * S;
+        const heartY = CONFIG.GRID_Y + hr * S;
 
-        // Heart column background
-        const shakeX = game.heartShake > 0 ? (Math.random() - 0.5) * 6 : 0;
+        const shakeX = game.heartShake > 0 ? (Math.random() - 0.5) * 5 : 0;
+        const shakeY = game.heartShake > 0 ? (Math.random() - 0.5) * 3 : 0;
 
-        // Full column fill
-        ctx.fillStyle = 'rgba(120,10,50,0.4)';
-        ctx.fillRect(heartX + shakeX, heartY, S, heartH);
+        // Heart tile fill with pulsing glow
+        const pulse = (Math.sin(this.time * 2.5) * 0.5 + 0.5) * 0.15;
+        ctx.fillStyle = `rgba(180, 20, 70, ${0.35 + pulse})`;
+        ctx.fillRect(heartX + shakeX, heartY + shakeY, S, S);
 
-        // Border
+        // Border glow
         ctx.strokeStyle = '#8a1a5a';
         ctx.lineWidth = 3;
-        ctx.strokeRect(heartX + shakeX, heartY, S, heartH);
+        ctx.strokeRect(heartX + shakeX, heartY + shakeY, S, S);
 
-        // Heart HP bar (vertical)
+        // HP bar inside the tile (horizontal across bottom portion)
         const pct = game.dungeonHeartHp / CONFIG.DUNGEON_HEART_MAX_HP;
-        const barH = heartH - 20;
-        const barFill = barH * pct;
-        ctx.fillStyle = 'rgba(0,0,0,0.5)';
-        ctx.fillRect(heartX + 12 + shakeX, heartY + 10, S - 24, barH);
+        const barX = heartX + shakeX + 4;
+        const barY = heartY + shakeY + S - 14;
+        const barW = S - 8;
+        const barH = 8;
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillRect(barX, barY, barW, barH);
         const hpColor = pct > 0.5 ? '#E91E63' : pct > 0.25 ? '#FF5722' : '#B71C1C';
         ctx.fillStyle = hpColor;
-        ctx.fillRect(heartX + 12 + shakeX, heartY + 10 + barH - barFill, S - 24, barFill);
+        ctx.fillRect(barX, barY, barW * pct, barH);
 
-        // Heart emoji — pulsing
-        const pulse = 1 + Math.sin(this.time * 3) * 0.08;
-        const flash = game.heartFlash > 0 ? 0.9 : 1;
+        // Heart emoji — pulsing, centered in tile
+        const heartPulse = 1 + Math.sin(this.time * 3) * 0.09;
         ctx.save();
-        ctx.translate(heartX + S / 2 + shakeX, heartY + heartH / 2);
-        ctx.scale(pulse * flash, pulse * flash);
-        ctx.font = '36px serif';
+        ctx.translate(heartX + S / 2 + shakeX, heartY + S / 2 - 4 + shakeY);
+        ctx.scale(heartPulse, heartPulse);
+        ctx.font = '30px serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         if (game.heartFlash > 0) {
@@ -199,20 +221,17 @@ class Renderer {
         ctx.fillText('❤️', 0, 0);
         ctx.restore();
 
-        // HP text
-        ctx.font = 'bold 12px sans-serif';
+        // HP number
+        ctx.font = 'bold 9px sans-serif';
         ctx.fillStyle = '#ff6090';
         ctx.textAlign = 'center';
-        ctx.fillText(`${game.dungeonHeartHp}`, heartX + S / 2 + shakeX, heartY + heartH - 6);
+        ctx.fillText(`${game.dungeonHeartHp}`, heartX + S / 2 + shakeX, barY - 1);
 
-        // Label
-        ctx.save();
-        ctx.translate(heartX + S / 2, heartY - 4);
-        ctx.font = 'bold 10px sans-serif';
+        // Label above the tile
+        ctx.font = 'bold 9px sans-serif';
         ctx.fillStyle = '#8a1a5a';
         ctx.textAlign = 'center';
-        ctx.fillText('HEART', 0, 0);
-        ctx.restore();
+        ctx.fillText('HEART', heartX + S / 2, heartY - 3);
     }
 
     // ─── Entities ────────────────────────────────────────────────────────────

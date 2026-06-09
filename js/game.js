@@ -46,7 +46,7 @@ class Game {
             trapCooldown: 0,
             slowBoost: 0,
             killBonus: 0,
-            maxSlots: 50, // 10 cols × 5 rows = all available cells
+            maxSlots: CONFIG.GRID_COLS * CONFIG.GRID_ROWS - CONFIG.DUNGEON_PATH.length,
         };
         this.placedCount = 0;
 
@@ -305,7 +305,7 @@ class Game {
         this.projectiles = [];
         this.particles = [];
         this.aoeEffects = [];
-        this.upgrades = { passiveGold: 0, monsterDamage: 0, monsterHealth: 0, trapCooldown: 0, slowBoost: 0, killBonus: 0, maxSlots: 50 };
+        this.upgrades = { passiveGold: 0, monsterDamage: 0, monsterHealth: 0, trapCooldown: 0, slowBoost: 0, killBonus: 0, maxSlots: CONFIG.GRID_COLS * CONFIG.GRID_ROWS - CONFIG.DUNGEON_PATH.length };
         this.placedCount = 0;
         this.selectedUnit = null;
         this.waveManager = new WaveManager();
@@ -330,7 +330,7 @@ class Game {
     }
 
     _splitSlime(m) {
-        // Try to place 2 mini slimes in adjacent cells
+        // Try to place 2 mini slimes in adjacent non-path cells
         const offsets = [[-1, 0], [1, 0], [0, -1], [0, 1]];
         let placed = 0;
         for (const [dc, dr] of offsets) {
@@ -338,7 +338,10 @@ class Game {
             const nc = m.col + dc;
             const nr = m.row + dr;
             if (nr < 0 || nr >= CONFIG.GRID_ROWS) continue;
-            if (nc < CONFIG.MIN_PLACE_COL || nc > CONFIG.MAX_PLACE_COL) continue;
+            if (nc < 0 || nc >= CONFIG.GRID_COLS) continue;
+            // Don't place on path or heart tiles
+            if (CONFIG.PATH_SET.has(`${nc},${nr}`)) continue;
+            if (nc === CONFIG.HEART_POS[0] && nr === CONFIG.HEART_POS[1]) continue;
             if (this.grid[nr][nc] !== null) continue;
             const mini = new MiniSlime(nc, nr, this.upgrades);
             this.grid[nr][nc] = mini;
@@ -356,11 +359,13 @@ class Game {
         this.heartShake = 0.4;
         this.memory.heroEscaped(hero);
         this._saveMemory();
-        // Screen shake particles
+        // Screen shake particles around heart position
+        const heartCX = CONFIG.GRID_X + CONFIG.HEART_POS[0] * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE / 2;
+        const heartCY = CONFIG.GRID_Y + CONFIG.HEART_POS[1] * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE / 2;
         for (let i = 0; i < 8; i++) {
             this.spawnParticle(
-                CONFIG.GRID_X + CONFIG.HEART_COL * CONFIG.CELL_SIZE + Math.random() * CONFIG.CELL_SIZE,
-                CONFIG.GRID_Y + CONFIG.GRID_ROWS * CONFIG.CELL_SIZE / 2,
+                heartCX + (Math.random() - 0.5) * CONFIG.CELL_SIZE,
+                heartCY + (Math.random() - 0.5) * CONFIG.CELL_SIZE,
                 '#FF1744',
                 '💔',
                 (Math.random() - 0.5) * 120,
@@ -376,8 +381,11 @@ class Game {
 
     placeUnit(col, row) {
         if (!this.selectedUnit) return;
-        if (col < CONFIG.MIN_PLACE_COL || col > CONFIG.MAX_PLACE_COL) return;
-        if (row < 0 || row >= CONFIG.GRID_ROWS) return;
+        if (col < 0 || col >= CONFIG.GRID_COLS || row < 0 || row >= CONFIG.GRID_ROWS) return;
+        // Reject placement on path tiles
+        if (CONFIG.PATH_SET.has(`${col},${row}`)) return;
+        // Reject placement on heart tile
+        if (col === CONFIG.HEART_POS[0] && row === CONFIG.HEART_POS[1]) return;
         if (this.grid[row][col] !== null) return;
         if (this.placedCount >= this.upgrades.maxSlots) return;
 

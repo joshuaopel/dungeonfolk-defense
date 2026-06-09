@@ -52,8 +52,7 @@ class WaveManager {
         let t = 0;
         for (let i = 0; i < count; i++) {
             const type = pool[Math.floor(Math.random() * pool.length)];
-            const lane = Math.floor(Math.random() * CONFIG.GRID_ROWS);
-            entries.push({ type, lane, delay: t });
+            entries.push({ type, delay: t });
             t += interval * (0.7 + Math.random() * 0.6);
         }
 
@@ -61,7 +60,7 @@ class WaveManager {
         if (isBossWave) {
             const bossTypes = Object.keys(CONFIG.BOSSES);
             const bossType = bossTypes[(Math.floor(waveNum / 5) - 1) % bossTypes.length];
-            entries.push({ type: bossType, lane: Math.floor(CONFIG.GRID_ROWS / 2), delay: t + 2, isBoss: true });
+            entries.push({ type: bossType, delay: t + 2, isBoss: true });
         }
 
         return { entries, isBossWave, waveNum };
@@ -108,7 +107,7 @@ class WaveManager {
         }
         if (!cfgBase) return;
 
-        const hero = new Hero(entry.lane, cfgBase, this.currentWave);
+        const hero = new Hero(cfgBase, this.currentWave);
 
         // Assign name from memory or fresh name
         const memory = game.memory.getOrCreate(cfgBase.id);

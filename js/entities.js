@@ -112,8 +112,8 @@ class Monster extends Entity {
         let closest = null;
         let closestDist = this.rangePixels;
         for (const h of heroes) {
-            if (h.dead || h.row !== this.row) continue;
-            // For non-phasing, prefer hero in front (leftmost closest from monster's perspective)
+            if (h.dead) continue;
+            // No lane restriction — attack any hero within range
             const dist = this.distanceTo(h);
             if (dist < closestDist) {
                 closestDist = dist;
@@ -154,7 +154,7 @@ class Monster extends Entity {
     _doAttack(target, game) {
         this.attackTimer = 1 / this.attackSpeed;
         if (this.cfg.ranged) {
-            game.spawnProjectile(this.x, this.y, target, this.attack, '#E8E8E8', 'arrow', this.row);
+            game.spawnProjectile(this.x, this.y, target, this.attack, '#E8E8E8', 'arrow');
         } else {
             const dmg = Math.max(1, this.attack - (target.armor || 0));
             target.takeDamage(dmg);
@@ -198,11 +198,12 @@ class MiniSlime extends Monster {
 // ─── Hero ─────────────────────────────────────────────────────────────────────
 
 class Hero extends Entity {
-    constructor(lane, cfg, waveNum) {
-        const x = CONFIG.GRID_X - 30;
-        const y = CONFIG.GRID_Y + lane * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE / 2;
+    constructor(cfg, waveNum) {
+        // Start just off-screen to the left of path entry point
+        const startPos = CONFIG.DUNGEON_PATH[0];
+        const x = CONFIG.GRID_X + startPos[0] * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE / 2 - CONFIG.CELL_SIZE;
+        const y = CONFIG.GRID_Y + startPos[1] * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE / 2;
         super(x, y);
-        this.row = lane;
         this.heroType = cfg.id;
         this.cfg = cfg;
         this.name = cfg.name;
@@ -223,6 +224,9 @@ class Hero extends Entity {
         this.reward = cfg.reward;
         this.armor = 0;
 
+        // Path progress: -0.5 means just entering (one step before index 0)
+        this.pathProgress = -0.5;
+
         // Hero state
         this.slowed = 0;        // seconds remaining
         this.slowAmount = 0;
@@ -241,6 +245,41 @@ class Hero extends Entity {
 
         // Cleric heal timer
         this.healTimer = 0;
+    }
+
+    // Returns world {x, y} for a given path progress value (supports interpolation)
+    getPathWorldPos(progress) {
+        const PATH = CONFIG.DUNGEON_PATH;
+        const S = CONFIG.CELL_SIZE;
+        const GX = CONFIG.GRID_X;
+        const GY = CONFIG.GRID_Y;
+
+        if (progress <= 0) {
+            // Interpolate from just before path start to path[0]
+            const [c0, r0] = PATH[0];
+            const tx = GX + c0 * S + S / 2;
+            const ty = GY + r0 * S + S / 2;
+            // Approach from the left (west)
+            const ox = tx - S;
+            const oy = ty;
+            const t = Math.max(0, progress + 0.5) / 0.5;
+            return { x: ox + (tx - ox) * t, y: oy + (ty - oy) * t };
+        }
+
+        const maxIdx = PATH.length - 1;
+        if (progress >= maxIdx) {
+            const [c, r] = PATH[maxIdx];
+            return { x: GX + c * S + S / 2, y: GY + r * S + S / 2 };
+        }
+
+        const i = Math.floor(progress);
+        const frac = progress - i;
+        const [c1, r1] = PATH[i];
+        const [c2, r2] = PATH[i + 1];
+        return {
+            x: GX + (c1 + (c2 - c1) * frac) * S + S / 2,
+            y: GY + (r1 + (r2 - r1) * frac) * S + S / 2,
+        };
     }
 
     update(dt, monsters, heroes, game) {
@@ -289,7 +328,7 @@ class Hero extends Entity {
             }
         }
 
-        // Find monster target
+        // Find monster target (any monster within range, no lane restriction)
         this.target = this._findTarget(monsters);
 
         if (this.target && !this.target.dead) {
@@ -297,19 +336,23 @@ class Hero extends Entity {
             if (this.attackTimer <= 0 && this.distanceTo(this.target) <= this.rangePixels) {
                 this._doAttack(game);
             }
-            // Melee heroes stop moving when a monster is within melee range
-            const col = Math.floor((this.x - CONFIG.GRID_X) / CONFIG.CELL_SIZE);
-            if (this.rangePixels < 130 && this.distanceTo(this.target) < this.rangePixels * 1.5) {
+            // Melee heroes stop advancing when a melee monster is in range
+            // rangePixels <= 110 means melee; stop when close enough to fight
+            if (this.rangePixels <= 110 && this.distanceTo(this.target) < this.rangePixels * 1.4) {
                 return;
             }
         }
 
-        // Move right
-        this.x += this.speed * dt;
+        // Advance along path
+        this.pathProgress += this.speed / CONFIG.CELL_SIZE * dt;
 
-        // Check if hero reached dungeon heart
-        const heartX = CONFIG.GRID_X + CONFIG.HEART_COL * CONFIG.CELL_SIZE + CONFIG.CELL_SIZE / 2;
-        if (this.x >= heartX - 20) {
+        // Sync x/y from path progress
+        const pos = this.getPathWorldPos(this.pathProgress);
+        this.x = pos.x;
+        this.y = pos.y;
+
+        // Check if hero reached dungeon heart (end of path)
+        if (this.pathProgress >= CONFIG.DUNGEON_PATH.length - 1) {
             game.heroDamagesHeart(this);
             this.dead = true;
         }
@@ -320,7 +363,7 @@ class Hero extends Entity {
         let bestDist = Infinity;
         for (const m of monsters) {
             if (m.dead) continue;
-            if (m.row !== this.row) continue; // heroes only fight in their own lane
+            // No lane restriction — target any monster within range
             const dist = this.distanceTo(m);
             if (dist <= this.rangePixels && dist < bestDist) {
                 bestDist = dist;
@@ -376,6 +419,7 @@ class Hero extends Entity {
     get displayY() { return this.y; }
     get hpPercent() { return this.hp / this.maxHp; }
     get col() { return Math.floor((this.x - CONFIG.GRID_X) / CONFIG.CELL_SIZE); }
+    get row() { return Math.floor((this.y - CONFIG.GRID_Y) / CONFIG.CELL_SIZE); }
 }
 
 // ─── Trap ─────────────────────────────────────────────────────────────────────
@@ -415,8 +459,10 @@ class Trap extends Entity {
 
         for (const h of heroes) {
             if (h.dead) continue;
+
             if (this.id === 'treasureChest') {
-                if (h.row === this.row && Math.abs(h.x - this.x) < 55) {
+                // Trigger when hero passes within half-cell distance
+                if (this.distanceTo(h) < CONFIG.CELL_SIZE * 0.65) {
                     h.stopped = this.cfg.stopDuration;
                     this.cooldownTimer = 15;
                     this.triggerFlash = 0.5;
@@ -424,10 +470,10 @@ class Trap extends Entity {
                 }
                 continue;
             }
-            if (h.row !== this.row) continue;
 
             if (this.id === 'spikeTrap') {
-                if (Math.abs(h.x - this.x) < 50) {
+                // Trigger when hero steps onto trap cell
+                if (this.distanceTo(h) < CONFIG.CELL_SIZE * 0.65) {
                     if (!h.cfg?.trapImmune) {
                         h.takeDamage(this.cfg.damage);
                         game.spawnParticle(h.x, h.y, '#F44336', this.cfg.damage);
@@ -439,7 +485,7 @@ class Trap extends Entity {
             }
 
             if (this.id === 'fallingChandelier') {
-                if (Math.abs(h.x - this.x) < this.cfg.aoeRadius * 0.8) {
+                if (this.distanceTo(h) < this.cfg.aoeRadius) {
                     let hit = false;
                     for (const target of heroes) {
                         if (!target.dead && this.distanceTo(target) < this.cfg.aoeRadius) {
@@ -453,6 +499,7 @@ class Trap extends Entity {
                         this.cooldownTimer = this.cfg.cooldown * (1 - (game.upgrades.trapCooldown || 0));
                         this.triggerFlash = 0.5;
                     }
+                    break; // only trigger once per cooldown cycle
                 }
             }
         }
